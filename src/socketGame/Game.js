@@ -23,14 +23,21 @@ class Game {
     this._formatter = new Formatter(this);
   }
 
-  sendToAll() {
-    const dataToSendEvery = [
+  sendToAll(type, userID) {
+    const dataToSend = [
       this._formatter.getUpdateWinnersData(),
       this._formatter.getUpdateRoomData(),
     ];
+
     this._players.forEach((user) => {
-      dataToSendEvery.forEach((data) => {
-        user.socket.send(JSON.stringify(data));
+      dataToSend.forEach((data) => {
+        if (type === "create_room" && userID) {
+          if (userID !== user.userID) {
+            user.socket.send(JSON.stringify(data));
+          }
+        } else {
+          user.socket.send(JSON.stringify(data));
+        }
       });
     });
   }
@@ -43,7 +50,7 @@ class Game {
     const currentUser = this._players.find((user) => user.socket === socket);
     const room = createRoom(currentUser);
     this._rooms.push(room);
-    this.sendToAll();
+    this.sendToAll("create_room", currentUser.userID);
   }
   add_user_to_room({ indexRoom }, socket) {
     const currentRoom = this._rooms.find(
@@ -52,6 +59,7 @@ class Game {
     const currentUser = this._players.find((user) => user.socket === socket);
     currentRoom.players.push(currentUser);
 
+    currentRoom.started = true;
     this.sendToAll();
     currentRoom.players.forEach((user) => {
       user.socket.send(

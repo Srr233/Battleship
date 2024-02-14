@@ -17,15 +17,19 @@ export class Formatter {
   }
 
   getUpdateRoomData() {
-    const roomsData = this.game._rooms.map((room) => {
-      return {
-        roomId: room.indexRoom,
-        roomUsers: room.players.map((user) => ({
-          name: user.name,
-          index: user.userID,
-        })),
-      };
-    });
+    const roomsData = this.game._rooms
+      .map((room) => {
+        if (!room.started) {
+          return {
+            roomId: room.indexRoom,
+            roomUsers: room.players.map((user) => ({
+              name: user.name,
+              index: user.userID,
+            })),
+          };
+        }
+      })
+      .filter((r) => r);
     return {
       type: "update_room",
       data: JSON.stringify(roomsData),

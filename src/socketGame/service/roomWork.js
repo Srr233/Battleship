@@ -5,6 +5,7 @@ export function createRoom(player) {
     indexRoom: getNewId(),
     players: [player],
     id: 0,
+    started: false,
   };
 }
 
