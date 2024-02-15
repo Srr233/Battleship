@@ -6,10 +6,6 @@ export function createRoom(player) {
     players: [player],
     id: 0,
     started: false,
+    turnId: null,
   };
-}
-
-export function addToRoom(player) {
-  "use strict";
-  this._room.data.player2 = player;
 }

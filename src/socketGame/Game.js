@@ -2,6 +2,7 @@ import { WebSocketServer } from "ws";
 import { reg as regService } from "./service/reg.js";
 import { createRoom } from "./service/roomWork.js";
 import { Formatter } from "./Formatter.js";
+import { getAllPositionOfShip } from "./service/getAllPositionOfShip.js";
 
 class Game {
   constructor() {
@@ -49,6 +50,7 @@ class Game {
   create_room(_, socket) {
     const currentUser = this._players.find((user) => user.socket === socket);
     const room = createRoom(currentUser);
+    room.turnId = currentUser.userID;
     this._rooms.push(room);
     this.sendToAll("create_room", currentUser.userID);
   }
@@ -67,54 +69,95 @@ class Game {
       );
     });
   }
-  start_game(startGameData) {
-    console.log("hehe");
+
+  attack(attackData) {
+    const currentRoom = this._rooms.find(
+      (room) => room.indexRoom === attackData.gameId
+    );
+
+    if (currentRoom.turnId !== attackData.indexPlayer) return;
+
+    const currentUser = currentRoom.players.find(
+      (player) => player.userID === attackData.indexPlayer
+    );
+    const enemyUser = currentRoom.players.find(
+      (player) => player.userID !== attackData.indexPlayer
+    );
+    const { x, y } = attackData;
+
+    let [idOfShip, status] = [-1, "miss"];
+    let nextTurnId = enemyUser.userID;
+
+    for (let i = 0; i < enemyUser.game.ships.length; i++) {
+      const ship = enemyUser.game.ships[i];
+      const allPosOfShip = getAllPositionOfShip(
+        ship.direction,
+        ship.position.x,
+        ship.position.y,
+        ship.length
+      );
+
+      allPosOfShip.forEach((pos) => {
+        if (pos.x === x && pos.y === y) {
+          ship.hitsCount ? (ship.hitsCount += 1) : (ship.hitsCount = 1);
+          idOfShip = i;
+        }
+      });
+
+      if (idOfShip > -1) {
+        if (ship.hitsCount === ship.length) {
+          enemyUser.game.ships = enemyUser.game.ships.filter(
+            (_, i) => i !== idOfShip
+          );
+          status = "killed";
+          nextTurnId = currentUser.userID;
+        } else {
+          status = "shot";
+          nextTurnId = currentUser.userID;
+        }
+        break;
+      }
+    }
+    currentRoom.turnId = nextTurnId;
+    currentRoom.players.forEach((player) => {
+      const attackData = this._formatter.getAttackData(
+        currentUser.userID,
+        status,
+        { x, y }
+      );
+      player.socket.send(JSON.stringify(attackData));
+      player.socket.send(
+        JSON.stringify(this._formatter.getTurnData(currentRoom.turnId))
+      );
+    });
   }
-  turn(turnData) {}
-  attack(attackData) {}
+
   finish(finishData) {}
   update_room() {
     return this._formatter.getUpdateRoomData();
   }
-  update_winners(updateWinnersData) {
-    return {
-      type: "update_winners",
-      data: JSON.stringify([
-        {
-          name: "me",
-          wins: 2,
-        },
-      ]),
-      id: 0,
-    };
-  }
   add_ships(addShipsData) {
-    const currRoom = this._room;
+    const currentRoom = this._rooms.find(
+      (room) => room.indexRoom === addShipsData.gameId
+    );
+    const currentUser = currentRoom.players.find(
+      (player) => player.userID === addShipsData.indexPlayer
+    );
 
-    if (currRoom.data.shipsPlayer1.userID === addShipsData.indexPlayer) {
-      currRoom.data.shipsPlayer1.ships = addShipsData.ships;
-    } else {
-      currRoom.data.shipsPlayer2.ships = addShipsData.ships;
-    }
-    if (currRoom.data.shipsPlayer2?.ships && currRoom.data.shipsPlayer1.ships) {
-      const dataPlayer1 = {
-        type: "start_game",
-        data: JSON.stringify({
-          ships: addShipsData.ships,
-          currentPlayerIndex: currRoom.player1.userID,
-        }),
-        id: 0,
-      };
-      const dataPlayer2 = {
-        type: "start_game",
-        data: JSON.stringify({
-          ships: addShipsData.ships,
-          currentPlayerIndex: currRoom.player2.userID,
-        }),
-        id: 0,
-      };
-      currRoom.player1.send(JSON.stringify(dataPlayer1));
-      currRoom.player2.send(JSON.stringify(dataPlayer2));
+    currentUser.game.ships = addShipsData.ships;
+    currentUser.shipsAdded = true;
+
+    if (currentRoom.players.every((player) => player.shipsAdded)) {
+      const turn = currentUser.userID;
+      this._currentTurnId = turn;
+      currentRoom.players.forEach((player) => {
+        player.socket.send(
+          JSON.stringify(
+            this._formatter.getStarteGameData(player.game.ships, player.userID)
+          )
+        );
+        player.socket.send(JSON.stringify(this._formatter.getTurnData(turn)));
+      });
     }
   }
 }

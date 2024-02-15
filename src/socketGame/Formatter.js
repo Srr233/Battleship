@@ -49,4 +49,37 @@ export class Formatter {
       id: 0,
     };
   }
+
+  getStarteGameData(ships, userId) {
+    return {
+      type: "start_game",
+      data: JSON.stringify({
+        ships,
+        currentPlayerIndex: userId,
+      }),
+      id: 0,
+    };
+  }
+
+  getTurnData(userId) {
+    return {
+      type: "turn",
+      data: JSON.stringify({
+        currentPlayer: userId,
+      }),
+      id: 0,
+    };
+  }
+
+  getAttackData(userId, status, position) {
+    return {
+      type: "attack",
+      data: JSON.stringify({
+        position,
+        currentPlayer: userId,
+        status: status,
+      }),
+      id: 0,
+    };
+  }
 }

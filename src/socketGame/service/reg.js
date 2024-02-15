@@ -12,6 +12,7 @@ export function reg(regData, socket) {
       game: {
         ships: null,
       },
+      shipsAdded: false,
       id: 0,
     };
     this._players.push(newUser);
