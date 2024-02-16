@@ -82,4 +82,12 @@ export class Formatter {
       id: 0,
     };
   }
+
+  getFinishData(userId) {
+    return {
+      type: "finish",
+      data: JSON.stringify({ winPlayer: userId }),
+      id: 0,
+    };
+  }
 }

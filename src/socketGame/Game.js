@@ -3,6 +3,10 @@ import { reg as regService } from "./service/reg.js";
 import { createRoom } from "./service/roomWork.js";
 import { Formatter } from "./Formatter.js";
 import { getAllPositionOfShip } from "./service/getAllPositionOfShip.js";
+import { isAttackedPos } from "./service/isAttackedPos.js";
+import { getRandomPos } from "./service/getRandomPos.js";
+import { getPlayersAndRoom } from "./service/getPlayersAndRoom.js";
+import { getAroundCeils } from "./service/getAroundCeils.js";
 
 class Game {
   constructor() {
@@ -71,23 +75,23 @@ class Game {
   }
 
   attack(attackData) {
-    const currentRoom = this._rooms.find(
-      (room) => room.indexRoom === attackData.gameId
+    const { currentRoom, currentUser, enemyUser } = getPlayersAndRoom(
+      this._rooms,
+      attackData.gameId,
+      attackData.indexPlayer
     );
 
     if (currentRoom.turnId !== attackData.indexPlayer) return;
 
-    const currentUser = currentRoom.players.find(
-      (player) => player.userID === attackData.indexPlayer
-    );
-    const enemyUser = currentRoom.players.find(
-      (player) => player.userID !== attackData.indexPlayer
-    );
     const { x, y } = attackData;
+
+    // check if we had the shot before
+    const isAttacked = isAttackedPos(enemyUser.game.shotPositions, { x, y });
+    if (isAttacked) return;
 
     let [idOfShip, status] = [-1, "miss"];
     let nextTurnId = enemyUser.userID;
-
+    let killedData;
     for (let i = 0; i < enemyUser.game.ships.length; i++) {
       const ship = enemyUser.game.ships[i];
       const allPosOfShip = getAllPositionOfShip(
@@ -105,7 +109,15 @@ class Game {
       });
 
       if (idOfShip > -1) {
+        enemyUser.game.shotPositions.push({ x, y });
         if (ship.hitsCount === ship.length) {
+          const ceilsAround = getAroundCeils(allPosOfShip, ship.direction);
+
+          ceilsAround.forEach(({ x, y }) => {
+            enemyUser.game.shotPositions.push({ x, y });
+          });
+          killedData = ceilsAround;
+
           enemyUser.game.ships = enemyUser.game.ships.filter(
             (_, i) => i !== idOfShip
           );
@@ -118,6 +130,19 @@ class Game {
         break;
       }
     }
+    // if enemy is killed
+    if (!enemyUser.game.ships.length) {
+      this._rooms = this._rooms.filter(
+        (room) => room.indexRoom !== currentRoom.indexRoom
+      );
+      currentUser.wins += 1;
+      currentRoom.players.forEach((player) => {
+        player.socket.send(
+          JSON.stringify(this._formatter.getFinishData(currentUser.userID))
+        );
+      });
+      this.sendToAll();
+    }
     currentRoom.turnId = nextTurnId;
     currentRoom.players.forEach((player) => {
       const attackData = this._formatter.getAttackData(
@@ -125,13 +150,39 @@ class Game {
         status,
         { x, y }
       );
+
       player.socket.send(JSON.stringify(attackData));
       player.socket.send(
         JSON.stringify(this._formatter.getTurnData(currentRoom.turnId))
       );
+      if (killedData) {
+        killedData.forEach((data) => {
+          const attackData = this._formatter.getAttackData(
+            currentUser.userID,
+            data.status,
+            { x: data.x, y: data.y }
+          );
+          player.socket.send(JSON.stringify(attackData));
+        });
+      }
     });
   }
 
+  randomAttack(data) {
+    const { enemyUser } = getPlayersAndRoom(
+      this._rooms,
+      data.gameId,
+      data.indexPlayer
+    );
+
+    const randomPosition = getRandomPos(enemyUser.game.shotPositions);
+
+    this.attack({
+      gameId: data.gameId,
+      indexPlayer: data.indexPlayer,
+      ...randomPosition,
+    });
+  }
   finish(finishData) {}
   update_room() {
     return this._formatter.getUpdateRoomData();

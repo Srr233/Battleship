@@ -11,6 +11,7 @@ export function reg(regData, socket) {
       userID: getNewId(),
       game: {
         ships: null,
+        shotPositions: [],
       },
       shipsAdded: false,
       id: 0,
