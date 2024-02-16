@@ -1,8 +1,9 @@
-import { checkExistUser } from "./checkExistUser.js";
+import { getExistUser } from "./getExistUser.js";
 import { getNewId } from "./getNewId.js";
 
 export function reg(regData, socket) {
-  if (checkExistUser(regData.name, this._players)) {
+  const currentUser = getExistUser(regData, this._players);
+  if (!currentUser) {
     const newUser = {
       socket,
       name: regData.name,
@@ -26,13 +27,26 @@ export function reg(regData, socket) {
       }),
     };
   } else {
+    if (currentUser) {
+      if (currentUser.password === regData.password) {
+        currentUser.socket = socket;
+        return {
+          type: "reg",
+          data: JSON.stringify({
+            name: currentUser.name,
+            index: currentUser.userID,
+            error: false,
+          }),
+        };
+      }
+    }
     return {
       type: "reg",
       data: JSON.stringify({
         name: regData.name,
         index: -1,
         error: true,
-        errorText: "Username already exists! Please, choose another one!",
+        errorText: "Username or password is not correct!",
       }),
       id: 0,
     };
