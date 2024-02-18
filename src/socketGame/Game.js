@@ -15,11 +15,40 @@ class Game {
       socket.on("message", (rawData) => {
         const data = JSON.parse(rawData.toString("utf-8"));
 
+        if (data.type === "single_play") console.log("Not implemented!");
         if (data.data) {
           this[data.type](JSON.parse(data.data), socket, this);
         } else {
           this[data.type]("", socket);
         }
+      });
+      socket.on("close", () => {
+        this._players = this._players.filter(
+          (player) => player.socket !== socket
+        );
+        const currentRoom = this._rooms.find((room) => {
+          const currUser = room.players.find(
+            (player) => player.socket === socket
+          );
+          if (currUser) return true;
+        });
+        this._rooms = this._rooms.filter((room) => room !== currentRoom);
+        if (currentRoom) {
+          currentRoom.players.forEach((player) => {
+            player.socket.send(
+              JSON.stringify({
+                type: "diconnect",
+              })
+            );
+          });
+        } else {
+          socket.send(
+            JSON.stringify({
+              type: "diconnect",
+            })
+          );
+        }
+        this.sendToAll();
       });
     });
 
@@ -117,6 +146,9 @@ class Game {
             enemyUser.game.shotPositions.push({ x, y });
           });
           killedData = ceilsAround;
+          allPosOfShip.forEach((pos) => {
+            killedData.push({ status: "killed", x: pos.x, y: pos.y });
+          });
 
           enemyUser.game.ships = enemyUser.game.ships.filter(
             (_, i) => i !== idOfShip
